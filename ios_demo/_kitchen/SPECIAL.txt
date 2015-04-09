@@ -1,0 +1,12 @@
+# By default each SVG file will map to a full *set* of PNG files
+# For iOS, each set consists of 3 files: the original, @2x, and @3x sizes
+# For Android, each set consists of 5 files: ldpi, mdpi, hdpi, xhdpi, and xxhdpi
+
+# However, sometimes you might need to scale an SVG file, or have multiple versions of 
+# the same file at different scales. The following example shows:
+#
+# 1) how to scale an SVG file under the original name
+# 2) how to scale an SVG file and save it under a different name
+
+account-add-photo   1.2
+def-avatar          2.0        def-avatar-iPad

@@ -29,6 +29,7 @@
 var _ = require('lodash');
 var Promise = require('bluebird');
 var fs = Promise.promisifyAll(require("fs"));
+var GetOpt = require('node-getopt');
 var path = require('path');
 var readline = require('readline');
 var svg2png = require('svg2png');
@@ -142,7 +143,6 @@ function registerSpecialConversion (line, platform, tasks) {
     registerConversion (sourceFileName, targetFileName, Number(scale), platform, tasks);
 }
 
-
 function parseSpecialConversionList (project) {
 
     var deferred = Promise.pending()
@@ -166,7 +166,6 @@ function parseSpecialConversionList (project) {
     return deferred.promise;
 }
 
-
 function scanForSVGFiles (project) {
     return fs.readdirAsync(project.sourceDir)
         .then(function (files) {
@@ -182,7 +181,6 @@ function scanForSVGFiles (project) {
             return true;
         });
 }
-
 
 function handleProject (project) {
     project.conversions = {};
@@ -201,10 +199,8 @@ function handleProject (project) {
     // generate contact sheet
 }
 
-
-function main(argv) {
-
-    Promise.all(_.map(config.projects, function(p) {
+function handleProjectsAndPrintStats (projects) {
+    Promise.all(_.map(projects, function(p) {
         return handleProject(p);
     })).then(function(results) {
         return Promise.all([_.sum(results), globalQueue.start()]);
@@ -213,4 +209,45 @@ function main(argv) {
     });    
 }
 
-main (process.argv);
+function main() {
+    var getopt = new GetOpt([
+        ['a', 'all',    'convert all the projects listed in config_local.js'],
+        ['f', 'force',  'reconvert all files regardless the last modification time'],
+        ['h', 'help',   'display this help']
+    ]);
+
+    getopt.setHelp(
+        "Usage: node savvy-svg2png.js [OPTION] [<project name>]\n" +
+        "Convert SVG graphics to PNG for iOS and Android development.\n" +
+        "\n" +
+        "[[OPTIONS]]\n" +
+        "\n" +
+        "Installation: npm install savvy-svg2png\n" +
+        "Respository:  https://github.com/raymondjia/savvy-svg2png\n"
+    ).bindHelp().parseSystem();
+
+    if (getopt.parsedOption.options.force === true)
+        config.force = true;
+
+    var projects;
+    if (getopt.parsedOption.options.all === true)
+        projects = config.projects;
+    else {
+        var projectNames = getopt.parsedOption.argv;
+        if (projectNames.length === 0) {
+            console.info('Available projects: ');
+            _.each(config.projects, function(p) {
+                console.info(p.name);
+            });
+            process.exit(0);
+        }
+
+        projects = _.filter(config.projects, function(p) {
+            return p.name in projectNames;
+        });
+    }
+
+    handleProjectsAndPrintStats (projects);
+}
+
+main();

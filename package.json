@@ -13,7 +13,8 @@
     "phantomjs": "~1.9.16",
     "svg2png": "~1.1.1",
     "lodash": "~3.6.0",
-    "bluebird": "~2.9.24"
+    "bluebird": "~2.9.24",
+    "node-getopt": "~0.2.3"
   },
   "devDependencies": {},
   "bundledDependencies": []

@@ -61,6 +61,29 @@ var WorkQueue = function() {
 
         var work = me.queue.pop();
         
+        if (config.force !== true) {
+            var sourceStat, targetStat;
+            try {
+                sourceStat = fs.statSync(work.sourcePath);
+            } catch (e) {
+                // source doesn't exist, skip it
+                setTimeout(me.worker, 10);
+                return;                
+            }
+
+            try {
+                targetStat = fs.statSync(work.targetPath);                
+            } catch (e) {
+                targetStat = { mtime: 0 };
+            }
+
+            if (sourceStat.mtime < targetStat.mtime) {
+                // source is older than target, skip this file
+                setTimeout(me.worker, 10);
+                return;
+            }
+        }
+
         svg2png (work.sourcePath, work.targetPath, work.scale, function (err) {
             console.log(work.sourcePath + ' --> ' + work.targetPath);
             if (err)
@@ -243,7 +266,7 @@ function main() {
         }
 
         projects = _.filter(config.projects, function(p) {
-            return p.name in projectNames;
+            return _.indexOf(projectNames, p.name) > -1;
         });
     }
 

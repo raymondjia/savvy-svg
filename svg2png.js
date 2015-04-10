@@ -32,6 +32,7 @@ var fs = Promise.promisifyAll(require("fs"));
 var path = require('path');
 var readline = require('readline');
 var svg2png = require('svg2png');
+var util = require('util');
 
 var config = require('./config');
 
@@ -43,6 +44,8 @@ String.prototype.endsWith = function(suffix) {
 
 var WorkQueue = function() {
     this.queue = [];
+    this.count = 0;
+    this.deferred;
     var me = this;
 
     this.addWork = function(work) {
@@ -50,19 +53,27 @@ var WorkQueue = function() {
     };
 
     this.worker = function() {
-        if (me.queue.length === 0)
+        if (me.queue.length === 0) {
+            me.deferred.fulfill(me.count)
             return;
+        }
 
         var work = me.queue.pop();
         
-        console.log(work.sourcePath + ' --> ' + work.targetPath);
         svg2png (work.sourcePath, work.targetPath, work.scale, function (err) {
-            setTimeout(me.worker, 100);
+            console.log(work.sourcePath + ' --> ' + work.targetPath);
+            if (err)
+                console.log(err);
+            else 
+                me.count ++;
+            setTimeout(me.worker, 10);
         });
     };
 
     this.start = function() {
+        me.deferred = Promise.pending()
         setTimeout(me.worker, 0);
+        return me.deferred.promise;
     };
 };
 
@@ -181,24 +192,25 @@ function handleProject (project) {
         ])
         .then(function(results) {
             _.each(project.conversions, function(value, key) {
-                console.log(value);
                 convertFile (value.sourceFileName, key, value.scale, project);
             });
 
-            globalQueue.start();
-            return true;
+            return _.keys(project.conversions).length;
         })
-
 
     // generate contact sheet
 }
 
-// list of projects
-// take command arg, if missing, run all the projects
-// otherwise run the specified project
 
-_.each(config.projects, function(p) {
-    handleProject(p).then(function(results) {
-        console.log(results);
-    })
-});
+function main(argv) {
+
+    Promise.all(_.map(config.projects, function(p) {
+        return handleProject(p);
+    })).then(function(results) {
+        return Promise.all([_.sum(results), globalQueue.start()]);
+    }).then(function(results) {
+        console.log(util.format('%d SVG files processed; %d PNG files generated.', results[0], results[1]));    
+    });    
+}
+
+main (process.argv);

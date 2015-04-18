@@ -61,27 +61,25 @@ var WorkQueue = function() {
 
         var work = me.queue.pop();
         
-        if (config.force !== true) {
-            var sourceStat, targetStat;
-            try {
-                sourceStat = fs.statSync(work.sourcePath);
-            } catch (e) {
-                // source doesn't exist, skip it
-                setTimeout(me.worker, 10);
-                return;                
-            }
+        var sourceStat, targetStat;
+        try {
+            sourceStat = fs.statSync(work.sourcePath);
+        } catch (e) {
+            // source doesn't exist, skip it
+            setTimeout(me.worker, 10);
+            return;                
+        }
 
-            try {
-                targetStat = fs.statSync(work.targetPath);                
-            } catch (e) {
-                targetStat = { mtime: 0 };
-            }
+        try {
+            targetStat = fs.statSync(work.targetPath);                
+        } catch (e) {
+            targetStat = { mtime: 0 };
+        }
 
-            if (sourceStat.mtime < targetStat.mtime) {
-                // source is older than target, skip this file
-                setTimeout(me.worker, 10);
-                return;
-            }
+        if (!work.mustRun && sourceStat.mtime < targetStat.mtime) {
+            // source is older than target, skip this file
+            setTimeout(me.worker, 10);
+            return;
         }
 
         svg2png (work.sourcePath, work.targetPath, work.scale, function (err) {
@@ -118,109 +116,172 @@ function convertFileForResolution (sourceName, targetPartialPath, scale, project
     });
 }
 
+function enqueueWithScale (sourceName, targetPartialPath, scale, project) {
+    globalQueue.addWork({
+        sourcePath: path.join(project.sourceDir, sourceName + '.svg'),
+        targetPath: path.join(project.targetDir, targetPartialPath + '.png'),
+        scale: scale,
+        mustRun: mustRun
+    });
+}
 
-function convertFile (sourceName, targetName, scale, project) {
-    // TODO: check if the file has been modified
+function enqueueWithDimension (sourceName, targetPartialPath, width, height, project) {
+    globalQueue.addWork({
+        sourcePath: path.join(project.sourceDir, sourceName + '.svg'),
+        targetPath: path.join(project.targetDir, targetPartialPath + '.png'),
+        width: width,
+        height: height,
+        mustRun: mustRun
+    });
+}
+
+function enqueueForConversion (sourceName, targetName, scale, width, height, mustRun, project) {
     if (project.platform === 'iOS') {
-        convertFileForResolution (sourceName, targetName, scale, project);
-        convertFileForResolution (sourceName, targetName + '@2x', scale * 2.0, project);
-        convertFileForResolution (sourceName, targetName + '@3x', scale * 3.0, project);
+        if (scale === undefined) {
+            enqueueWithDimension (sourceName, targetName, width, height, mustRun, project);
+            enqueueWithDimension (sourceName, targetName + '@2x', width * 2.0, height * 2.0, mustRun, project);
+            enqueueWithDimension (sourceName, targetName + '@3x', width * 3.0, height * 3.0, mustRun, project);
+        } else {
+            enqueueWithScale (sourceName, targetName, scale, mustRun, project);
+            enqueueWithScale (sourceName, targetName + '@2x', scale * 2.0, mustRun, project);
+            enqueueWithScale (sourceName, targetName + '@3x', scale * 3.0, mustRun, project);
+        }
     }
     else if (project.platform === 'Android') {
         var androidTargetName = normalizeFileNameForAndroid (targetName);
-        convertFileForResolution (sourceName, path.join('drawable-ldpi', androidTargetName), scale * 0.75, project);
-        convertFileForResolution (sourceName, path.join('drawable-mdpi', androidTargetName), scale, project);
-        convertFileForResolution (sourceName, path.join('drawable-hdpi', androidTargetName), scale * 1.5, project);
-        convertFileForResolution (sourceName, path.join('drawable-xhdpi', androidTargetName), scale * 2.0, project);
-        convertFileForResolution (sourceName, path.join('drawable-xxhdpi', androidTargetName), scale * 3.0, project);
+        if (scale === undefined) {
+            enqueueWithDimension (sourceName, path.join('drawable-ldpi', androidTargetName), width * 0.75, height * 0.75, mustRun, project);
+            enqueueWithDimension (sourceName, path.join('drawable-mdpi', androidTargetName), width, height, mustRun, project);
+            enqueueWithDimension (sourceName, path.join('drawable-hdpi', androidTargetName), width * 1.5, height * 1.5, mustRun, project);
+            enqueueWithDimension (sourceName, path.join('drawable-xhdpi', androidTargetName), width * 2.0, height * 2.0, mustRun, project);
+            enqueueWithDimension (sourceName, path.join('drawable-xxhdpi', androidTargetName), width * 3.0, height * 3.0, mustRun, project);
+        } else {
+            enqueueWithScale (sourceName, path.join('drawable-ldpi', androidTargetName), scale * 0.75, mustRun, project);
+            enqueueWithScale (sourceName, path.join('drawable-mdpi', androidTargetName), scale, mustRun, project);
+            enqueueWithScale (sourceName, path.join('drawable-hdpi', androidTargetName), scale * 1.5, mustRun, project);
+            enqueueWithScale (sourceName, path.join('drawable-xhdpi', androidTargetName), scale * 2.0, mustRun, project);
+            enqueueWithScale (sourceName, path.join('drawable-xxhdpi', androidTargetName), scale * 3.0, mustRun, project);
+        }
     }
 }
 
+function registerMetaDataItem (meta, source, target, scale, width, height) {
+    if (source.endsWith('.svg'))
+        source = source.substr(0, source.length - 4);       // strip the .svg suffix
 
-function registerConversion (srcName, targetName, scale, conversions) {
-    conversions[targetName] = {
-        sourceFileName: srcName,
+    if (target === undefined)
+        target = source;
+    else if (target.endsWith('.png'))
+        target = target.substr(0, target.length - 4);       // strip the .png suffix
+
+    meta[target] = {
+        source: source,
+        target: target,
         scale: scale,
-    };    
-}
+        width: width,
+        height: height
+    };
+} 
 
-
-function registerRegularConversion (fileName, conversions) {
-    registerConversion (fileName, fileName, 1.0, conversions);
-}
-
-
-function registerSpecialConversion (line, platform, tasks) {
+function parseLineOfMetaData (line, lineNumber, meta) {
+    line = line.strip();
     if (line.length === 0 || line[0] === '#')
         return;
 
-    var tokens = line.split(/ +/);
-    if (tokens.length < 2) {
-        console.log('Failed to parse: ' + line);
+    var matches = line.match(/(\w+)\s+([\d.]+)\s+([\d.]+)\s+(\w+)/);
+    if (matches !== null) {
+        registerMetaDataItem (lineNumber, matches[1], matches[4], /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
         return;
-    } 
-    var sourceFileName = tokens[0].trim();
-    var scale = tokens[1].trim();
-    var targetFileName = tokens.length > 2? tokens[2].trim() : sourceFileName;
-
-    registerConversion (sourceFileName, targetFileName, Number(scale), platform, tasks);
-}
-
-function parseSpecialConversionList (project) {
-
-    var deferred = Promise.pending()
-    var convs = project.conversions;
-
-    var scalingFileStream = fs.createReadStream (path.join(project.sourceDir, 'SPECIAL.txt'));
-    if (scalingFileStream) {
-        var rl = readline.createInterface ({
-            input: scalingFileStream,
-            output: process.null,
-            terminal: false
-        });
-        rl.on('line', function(line) {
-            registerSpecialConversion (line, convs);
-        });
-        rl.on('close', function() {
-            deferred.fulfill(true);
-        })
     }
 
-    return deferred.promise;
+    matches = line.match(/(\w+)\s+([\d.]+)\s+([\d.]+)/);
+    if (matches !== null) {
+        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
+        return;
+    }
+
+    matches = line.match(/(\w+)\s+([\d.]+)x\s+(\w+)/);
+    if (matches !== null) {
+        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/matches[2], /*scale*/parseFloat(matches[1]), undefined, undefined);
+        return;
+    }
+
+    matches = line.match(/(\w+)\s+([\d.]+)x/);
+    if (matches !== null) {
+        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/parseFloat(matches[1]), undefined, undefined);
+        return;
+    }
+
+    matches = line.match(/(\w+)/);
+    if (matches !== null) {
+        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/undefined, undefined, undefined);
+        return;
+    }
+
+    console.error(util.format('Incorrect format on line %d: %s', lineNumber, line));
 }
 
-function scanForSVGFiles (project) {
-    return fs.readdirAsync(project.sourceDir)
-        .then(function (files) {
-
-            var convs = project.conversions;            
-            _.each(files, function(fileName) {
-                if (fileName.endsWith('.svg') || fileName.endsWith('.SVG')) {
-                    fileName = fileName.substr(0, fileName.length - 4);
-                    registerRegularConversion(fileName, convs);
-                }
-            });
-
-            return true;
+function parseMetadataFile (path) {
+    var meta = {};
+    try {
+        var metaFileContent = fs.readFileSync(path).toString();
+        var lines = metaFileContent.split('\n');
+        var lineNumber = 1;
+        _.each(lines, function(line) {
+            parseLineOfMetaData (line, lineNumber ++, meta);
         });
+    } catch (e) {
+        return null;
+    }
+    return meta;
 }
 
 function handleProject (project) {
-    project.conversions = {};
-    return Promise.all([
-            scanForSVGFiles(project),
-            parseSpecialConversionList(project)
-        ])
-        .then(function(results) {
-            _.each(project.conversions, function(value, key) {
-                convertFile (value.sourceFileName, key, value.scale, project);
-            });
+    // load meta file
+    // check if force, check if a cached version of meta file exists
+    // compare meta files
+    // parse all lines
+    // mark changed lines as 'must run'
+    // if 'force' flag is set, all lines are 'must run'
+    // save a cached version of meta file
 
-            return _.keys(project.conversions).length;
-        })
+    var metaPath = path.join(project.sourceDir, 'META.txt');
+    var meta = parseMetadataFile(metaPath);
+    if (meta == null) {
+        console.error(util.format('Failed to open META file: %s', metaPath);
+        return;
+    }
+
+    var cachedMetaPath = path.join(project.sourceDir, '.cachedMETA.txt');
+    var cachedMeta = parseMetadataFile(cachedMetaPath);
+    if (cachedMeta == null) 
+        cachedMeta = {};
+
+    _.each(meta, function(value, key) {
+        var cachedValue = cachedMeta[key];
+        var mustRun = false;
+
+        if (cachedValue === undefined)
+            mustRun = true;
+        else if (value.source !== cachedValue.source ||
+                value.width !== cachedValue.width ||
+                value.height !== cachedValue.height ||
+                value.scale !== cachedValue.scale)
+            mustRun = true;
+
+        enqueueForConversion (value.source, 
+            key, // base name of the target file
+            value.scale, value.width, value.height, 
+            config.force || mustRun
+            project
+        )
+    });
+
+    fs.writeFileSync(cachedMetaPath, meta);
 
     // generate contact sheet
 }
+
 
 function handleProjectsAndPrintStats (projects) {
     Promise.all(_.map(projects, function(p) {
@@ -234,7 +295,7 @@ function handleProjectsAndPrintStats (projects) {
 
 function main() {
     var getopt = new GetOpt([
-        ['a', 'all',    'convert all the projects listed in config_local.js'],
+        ['a', 'all',    'convert all the projects registered in config_local.js'],
         ['f', 'force',  'reconvert all files regardless the last modification time'],
         ['h', 'help',   'display this help']
     ]);

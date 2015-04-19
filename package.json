@@ -1,5 +1,5 @@
 {
-  "name": "savvy-svg2png",
+  "name": "savvy-svg",
   "version": "0.1.0",
   "author": "Raymond C. Jia <raymondjia@gmail.com>",
   "description": "An SVG to PNG conversion tool for mobile development",
@@ -7,11 +7,9 @@
   "private": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/raymondjia/savvy-svg2png.git"
+    "url": "https://github.com/raymondjia/savvy-svg.git"
   },
   "dependencies": {
-    "phantomjs": "~1.9.16",
-    "svg2png": "~1.1.1",
     "lodash": "~3.6.0",
     "bluebird": "~2.9.24",
     "node-getopt": "~0.2.3"

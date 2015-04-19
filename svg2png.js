@@ -55,7 +55,7 @@ var WorkQueue = function() {
 
     this.worker = function() {
         if (me.queue.length === 0) {
-            me.deferred.fulfill(me.count)
+            me.deferred.fulfill(me.count);
             return;
         }
 
@@ -83,9 +83,9 @@ var WorkQueue = function() {
         }
 
         svg2png (work.sourcePath, work.targetPath, work.scale, function (err) {
-            console.log(work.sourcePath + ' --> ' + work.targetPath);
+            console.info(work.sourcePath + ' --> ' + work.targetPath);
             if (err)
-                console.log(err);
+                console.error(err);
             else 
                 me.count ++;
             setTimeout(me.worker, 10);
@@ -108,15 +108,7 @@ function normalizeFileNameForAndroid (original) {
     return normalized;    
 }
 
-function convertFileForResolution (sourceName, targetPartialPath, scale, project) {
-    globalQueue.addWork({
-        sourcePath: path.join(project.sourceDir, sourceName + '.svg'),
-        targetPath: path.join(project.targetDir, targetPartialPath + '.png'),
-        scale: scale,
-    });
-}
-
-function enqueueWithScale (sourceName, targetPartialPath, scale, project) {
+function enqueueWithScale (sourceName, targetPartialPath, scale, mustRun, project) {
     globalQueue.addWork({
         sourcePath: path.join(project.sourceDir, sourceName + '.svg'),
         targetPath: path.join(project.targetDir, targetPartialPath + '.png'),
@@ -125,7 +117,7 @@ function enqueueWithScale (sourceName, targetPartialPath, scale, project) {
     });
 }
 
-function enqueueWithDimension (sourceName, targetPartialPath, width, height, project) {
+function enqueueWithDimension (sourceName, targetPartialPath, width, height, mustRun, project) {
     globalQueue.addWork({
         sourcePath: path.join(project.sourceDir, sourceName + '.svg'),
         targetPath: path.join(project.targetDir, targetPartialPath + '.png'),
@@ -184,37 +176,37 @@ function registerMetaDataItem (meta, source, target, scale, width, height) {
 } 
 
 function parseLineOfMetaData (line, lineNumber, meta) {
-    line = line.strip();
+    line = line.trim();
     if (line.length === 0 || line[0] === '#')
         return;
 
     var matches = line.match(/(\w+)\s+([\d.]+)\s+([\d.]+)\s+(\w+)/);
     if (matches !== null) {
-        registerMetaDataItem (lineNumber, matches[1], matches[4], /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
+        registerMetaDataItem (meta, matches[1], matches[4], /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
         return;
     }
 
     matches = line.match(/(\w+)\s+([\d.]+)\s+([\d.]+)/);
     if (matches !== null) {
-        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/undefined, /*scale*/undefined, parseFloat(matches[2]), parseFloat(matches[3]));
         return;
     }
 
     matches = line.match(/(\w+)\s+([\d.]+)x\s+(\w+)/);
     if (matches !== null) {
-        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/matches[2], /*scale*/parseFloat(matches[1]), undefined, undefined);
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/matches[2], /*scale*/parseFloat(matches[1]), undefined, undefined);
         return;
     }
 
     matches = line.match(/(\w+)\s+([\d.]+)x/);
     if (matches !== null) {
-        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/parseFloat(matches[1]), undefined, undefined);
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/undefined, /*scale*/parseFloat(matches[1]), undefined, undefined);
         return;
     }
 
     matches = line.match(/(\w+)/);
     if (matches !== null) {
-        registerMetaDataItem (lineNumber, /*source*/matches[1], /*target*/undefined, /*scale*/undefined, undefined, undefined);
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/undefined, /*scale*/1.0, undefined, undefined);
         return;
     }
 
@@ -248,8 +240,8 @@ function handleProject (project) {
     var metaPath = path.join(project.sourceDir, 'META.txt');
     var meta = parseMetadataFile(metaPath);
     if (meta == null) {
-        console.error(util.format('Failed to open META file: %s', metaPath);
-        return;
+        console.error(util.format('Failed to open META file: %s', metaPath));
+        return 0;
     }
 
     var cachedMetaPath = path.join(project.sourceDir, '.cachedMETA.txt');
@@ -272,7 +264,7 @@ function handleProject (project) {
         enqueueForConversion (value.source, 
             key, // base name of the target file
             value.scale, value.width, value.height, 
-            config.force || mustRun
+            config.force || mustRun,
             project
         )
     });
@@ -280,16 +272,20 @@ function handleProject (project) {
     fs.writeFileSync(cachedMetaPath, meta);
 
     // generate contact sheet
+    return Object.keys(meta).length;
 }
 
 
 function handleProjectsAndPrintStats (projects) {
-    Promise.all(_.map(projects, function(p) {
-        return handleProject(p);
-    })).then(function(results) {
-        return Promise.all([_.sum(results), globalQueue.start()]);
-    }).then(function(results) {
-        console.log(util.format('%d SVG files processed; %d PNG files generated.', results[0], results[1]));    
+
+    var svgCount = 0;
+    _.each(projects, function(p) {
+        svgCount += handleProject(p);
+    })
+
+    globalQueue.start()
+    .then(function(results) {
+        console.log(util.format('%d SVG files processed; %d PNG files generated.', svgCount, results));    
     });    
 }
 

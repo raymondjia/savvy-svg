@@ -83,7 +83,8 @@ var WorkQueue = function() {
         }
 
         svg2png (work.sourcePath, work.targetPath, work.scale, function (err) {
-            console.info(work.sourcePath + ' --> ' + work.targetPath);
+            console.info(util.format('%s --> %s', work.sourcePath, work.scale, work.targetPath));
+            //console.info(work.sourcePath + ' --> ' + work.targetPath);
             if (err)
                 console.error(err);
             else 
@@ -194,13 +195,13 @@ function parseLineOfMetaData (line, lineNumber, meta) {
 
     matches = line.match(/(\w+)\s+([\d.]+)x\s+(\w+)/);
     if (matches !== null) {
-        registerMetaDataItem (meta, /*source*/matches[1], /*target*/matches[2], /*scale*/parseFloat(matches[1]), undefined, undefined);
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/matches[3], /*scale*/parseFloat(matches[2]), undefined, undefined);
         return;
     }
 
     matches = line.match(/(\w+)\s+([\d.]+)x/);
     if (matches !== null) {
-        registerMetaDataItem (meta, /*source*/matches[1], /*target*/undefined, /*scale*/parseFloat(matches[1]), undefined, undefined);
+        registerMetaDataItem (meta, /*source*/matches[1], /*target*/undefined, /*scale*/parseFloat(matches[2]), undefined, undefined);
         return;
     }
 
@@ -269,7 +270,8 @@ function handleProject (project) {
         )
     });
 
-    fs.writeFileSync(cachedMetaPath, meta);
+    // copy the entire content of META file to the cache
+    fs.writeFileSync(cachedMetaPath, fs.readFileSync(metaPath).toString());
 
     // generate contact sheet
     return Object.keys(meta).length;

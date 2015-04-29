@@ -1,8 +1,8 @@
 "use strict";
 
-var path = require("path");
-var fs = require("fs");
-var should = require("chai").should();
+// var path = require("path");
+// var fs = require("fs");
+var should = require("chai").should();      // jshint ignore:line
 var _ = require("lodash");
 
 var rewire = require("rewire");
@@ -130,8 +130,8 @@ describe("Parsing META file", function() {
                 error: function(arg) {
                     errorMessage = arg;
                 }
-            }
-            var revert = savvysvg.__set__('console', mockConsole);
+            };
+            var revert = savvysvg.__set__("console", mockConsole);
 
             savvysvg.parseLineOfMetaData("  source-file_name.svg\t 201x 19.5x \t target.File.png", 123, testMeta);
             testMeta.should.deep.equal(refMeta);
@@ -139,8 +139,8 @@ describe("Parsing META file", function() {
             errorMessage.should.match(/line 123/);
 
             revert();
-        })
-    })
+        });
+    });
 });
 
 specify("Command line arguments", function(done) {

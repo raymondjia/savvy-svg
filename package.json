@@ -25,7 +25,8 @@
   "devDependencies": {
     "chai": "^2.2.0",
     "jshint": "^2.6.3",
-    "mocha": "^2.2.1"
+    "mocha": "^2.2.1",
+    "rewire": "*"
   },
   "bundledDependencies": []
 }

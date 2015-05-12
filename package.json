@@ -26,7 +26,8 @@
     "chai": "^2.2.0",
     "jshint": "^2.6.3",
     "mocha": "^2.2.1",
-    "rewire": "*"
+    "rewire": "*",
+    "temp-fs": "~0.9.5"
   },
   "bundledDependencies": []
 }

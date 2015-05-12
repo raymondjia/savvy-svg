@@ -3,6 +3,8 @@
 // var path = require("path");
 // var fs = require("fs");
 var should = require("chai").should();      // jshint ignore:line
+var fs = require("fs");
+var tempfs = require("temp-fs");
 var _ = require("lodash");
 
 var rewire = require("rewire");
@@ -141,7 +143,70 @@ describe("Parsing META file", function() {
             revert();
         });
     });
+
+    describe("Parsing META file", function() {
+        var testData = [
+            "# this is a comment",
+            "", // blank line
+            "# another comment",
+            "line4 1.0x",
+            "line5 error here",
+            "line6 0.6x line6AltName"
+        ].join("\n");
+
+        var metaFilePath;
+
+        before(function() {
+            tempfs.track();
+            tempfs.open(function(err, tempFile) {
+                should.not.exist(err);
+                fs.writeSync(tempFile.fd, testData);
+                fs.closeSync(tempFile.fd);
+                metaFilePath = tempFile.path;
+
+            });
+        });
+
+        it("read every line", function() {
+            var meta = savvysvg.parseMetadataFile(metaFilePath);
+            meta.should.have.property("line4");
+            meta.should.have.property("line6");
+        });
+
+        it("should keep track of line number correctly", function() {
+            var errorMessage;
+            var mockConsole = {
+                error: function(arg) {
+                    errorMessage = arg;
+                }
+            };
+            var revert = savvysvg.__set__("console", mockConsole);
+            savvysvg.parseMetadataFile(metaFilePath);
+            revert();
+            errorMessage.should.match(/line 5/);
+        });
+
+        after(function() {
+            // temp file is removed automatically
+        });
+    });
 });
+
+
+describe("Handling of project", function() {
+    it("should report error if META file is not found", function() {
+
+    });
+
+    describe("Reading META file", function() {
+
+    });
+
+    describe("Detecting changes in META file", function() {
+        
+    });
+});
+
 
 specify("Command line arguments", function(done) {
     done();

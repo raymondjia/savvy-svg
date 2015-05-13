@@ -1,6 +1,6 @@
 {
   "name": "savvy-svg",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Raymond C. Jia <raymondjia@gmail.com>",
   "description": "An SVG to PNG conversion tool for mobile development",
   "license": "BSD",

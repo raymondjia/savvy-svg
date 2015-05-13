@@ -20,7 +20,8 @@
   "dependencies": {
     "lodash": "~3.6.0",
     "bluebird": "~2.9.24",
-    "node-getopt": "~0.2.3"
+    "node-getopt": "~0.2.3",
+    "svg2png": "git://github.com/raymondjia/svg2png#master"
   },
   "devDependencies": {
     "chai": "^2.2.0",
